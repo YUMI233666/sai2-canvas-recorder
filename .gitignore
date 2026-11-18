@@ -125,3 +125,11 @@ venv.bak/
 dmypy.json
 
 result
+
+# Local recorder runtime, settings and recordings
+.runtime/
+.cache/
+recordings/
+validation/
+recorder-settings.json
+recorder-profiles.json

@@ -30,6 +30,8 @@ dependencies = [
     'psutil',
     'pymemoryeditor',
     'ttkbootstrap',
+    'imageio-ffmpeg>=0.6',
+    "windows-capture==2.0.1; sys_platform == 'win32' and platform_machine == 'AMD64'",
 ]
 
 [tool.setuptools-gettext]
@@ -46,3 +48,4 @@ dev = [
 
 [project.scripts]
 art-timelapse = 'art_timelapse.gui:main'
+sai2-recorder = 'sai_recorder.gui:main'

@@ -1,118 +1,24 @@
-# Art Timelapse
-This program lets you create efficient timelapses of your drawing.
+# SAI2 画布录制器
 
-https://github.com/user-attachments/assets/a3ae2f09-2687-4c00-bf6e-b82af2c3b9fc
+适用于 Windows x64 的 PaintTool SAI Ver.2 独立录制工具。无需替换 SAI2 或安装插件；不包含 SAI2 本体，也不录音。
 
-<img width="666" height="809" alt="image" src="https://github.com/user-attachments/assets/d7fb67f8-83b0-4bad-938b-005126f962e4" />
+## 下载与使用
 
-### Why
-I made this program to be used primarily with Paint Tool SAIv2, (which does not have any builtin timelapse tool), however it can be used with any other program to do screen recording, or PSD file recording. This program can read image data from a running SAI process, so it can create full canvas timelapses without any flipping, zooming, rotation, etc. much like how Clip Studio's timelapses work.
+1. 从 [GitHub Releases](https://github.com/YUMI233666/sai2-canvas-recorder/releases) 下载 `windows-x64-external-ffmpeg.zip` 后缀的发行包，解压整个目录。
+2. 从 [FFmpeg 官方下载页](https://ffmpeg.org/download.html#build-windows) 选择一个包含 `libx264` 的 Windows 构建。将 `ffmpeg.exe` 放在 `SAI2CanvasRecorder.exe` 同目录，或将 FFmpeg 的 `bin` 目录加入 `PATH`。无需另装 Python。
+3. 打开 SAI2 和画布，启动 `SAI2CanvasRecorder.exe`，选好进程后点「连接画布」。选择采集来源、录制模式和输出位置，再开始录制。
 
-### Corrupt video recovery after system crash
-If you have a system crash or power failure while you were recording, the resulting video may be truncated and have missing header information.
-Some frames may be lost if they were not flushed to disk before the crash occurred. Anything that was written to disk may still be recoverable.
-You first need to make a reference video file from which to restore header information, so create a new short recording, perferably with the same dimensions as the corrupt video.
-Then use a recovery tool that can use the reference video to fix the corrupt video, such as https://github.com/anthwlock/untrunc. This may also be done with FFMPEG https://www.handyrecovery.com/fix-corrupted-video-using-ffmpeg/.
-In order to mitigate the chance that a recorded video is completely unrecoverable, you can configure a setting in this tool to automatically split recorded output after some number of frames, so that smaller video files are completely written more frequently.
+| 采集来源 | 适用场景 |
+| --- | --- |
+| 整画布（固定构图） | 只录画布的合成图。画布缩放、平移和旋转视图不影响视频，不含界面 |
+| 笔画过程（SAI2 窗口） | 采集 SAI2 当前显示的中间笔画。想保留落笔速度，搭配「实时录制」；会录入 SAI2 界面和视图变化 |
 
-### Windows prebuilt executable (pyinstaller)
-You can find prebuilt executables in the releases page instead of going through the source installation https://github.com/cromachina/art-timelapse/releases. It may still depend on ffmpeg (https://ffmpeg.org/download.html) being installed separately and added to the exe directory. One caveat of using the prebuilt pyinstaller executable is that it has a pretty slow startup time.
+支持实时和延时（自定义采样间隔）、MP4/MKV、暂停和分段恢复。多个录制会话可以归到同一画布文件夹，各自导出成片，不会自动合成总视频。
 
-### Installing from source on Windows
-- This method starts faster than the pyinstaller executable.
-- Install python: https://www.python.org/downloads/ (add to your system PATH)
-  - Alternatively: `winget install python`
-- Install ffmpeg: https://ffmpeg.org/download.html
-  - Alternatively: `winget install ffmpeg`
-- With virtual environment:
-  - Download the source to some location.
-  - In the source directory, create a virtual environment: `python -m venv --system-site-packages venv`
-  - Activate the virtual environment: `venv/bin/activate`
-  - Install the project: `pip install -e .`
-  - `art-timelapse` is now available in the current shell. You have to reactivate the venv if you open a new shell.
-- Global install:
-  - `pip install https://github.com/cromachina/art-timelapse/archive/refs/heads/main.zip`
-  - The Python `Scripts` directory must be in your environment variables PATH to be able to run from any shell, for example:
-    - `C:\Users\<Your-Username>\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\Scripts`
-- Run with: `art-timelapse`
-- This can be done similarly on Linux and MacOS, but you should use the Nix method instead.
+## 文档与源码
 
-### Installing with Nix on Ubuntu (or other Linux distros)
-- Initial nix setup:
-  - Install nix (may differ for your distro): `sudo apt install nix-bin`
-  - Add yourself to the `nix-users` group: ``sudo usermod -a -G nix-users `whoami` ``
-  - Refresh the group for your session: `newgrp nix-users`
-  - Update `nix.conf` so you can use flakes:
-    - `echo "extra-experimental-features = nix-command flakes" | sudo tee -a /etc/nix/nix.conf`
-- Run: `nix run github:cromachina/art-timelapse`
-- Run a specific version: `nix run github:cromachina/art-timelapse/v3.0.0`
-- Optional: Consider using `system-manager` if you want to install in a persistent config file: https://github.com/numtide/system-manager
+- [中文使用手册](README_zh-CN.md)：兼容性、输出目录、恢复分段和源码运行方式。
+- [手动验收](MANUAL_ACCEPTANCE.md) · [架构](docs/ARCHITECTURE.md) · [版本记录](CHANGES_RECORDER.md)
+- 录制器源码在 [`src/sai_recorder/`](src/sai_recorder)，保留了 [art-timelapse 上游说明](README_upstream.md)。
 
-### Installing on NixOS
-- Make sure experimental features are enabled for `nix-command` and `flakes`.
-- Example, run from source directory: `nix run`
-- Example, run from git: `nix run github:cromachina/art-timelapse`
-- Example, add to your `configuration.nix` so you can run `art-timelapse` directly:
-```nix
-environment.systemPackages = with pkgs; [
-  (builtins.getFlake "github:cromachina/art-timelapse/v3.0.0").packages.${pkgs.system}.default
-];
-```
-
-### Local dev
-- Run `python build_local.py` to build or update translation files for local testing.
-
-### Running in Wayland
-The dependencies `mss` (used for taking screenshots for both the window grabber and screen recording) and `pywinctl` (used by the window grabber and input tracker to identify the target window) do not currently work with Wayland compositors.
-One way to get around this is to use Xwayland to run a lightweight X11 window manager, like i3, and then run both SAI and art-timelapse inside of that.
-
-This is an example script that will start i3 in an Xwayland window, and then start SAI (configured with Bottles) and art-timelapse.
-This script depends on: `xwayland-run`, `i3`, and `bottles`.
-Change the `SAI_BOTTLE` and `SAI_PROGRAM` names according to your own Bottles config.
-```sh
-#!/usr/bin/env sh
-SAI_BOTTLE=SAIv2
-SAI_PROGRAM=sai2
-export XDG_SESSION_TYPE=x11
-export I3SOCK=~/.i3/i3-ipc.sock
-cd ~
-xwayland-run -decorate -- i3 &
-until [ -e $I3SOCK ]; do sleep 1; done
-i3-msg exec "workspace 1; exec bottles-cli run -b $SAI_BOTTLE -p $SAI_PROGRAM; exec art-timelapse"
-```
-
-Clipboard will also probably not work between the host and Xwayland windows. I don't know of a workaround for this.
-
-### Todo
-- Linux AppImage
-
-### Dev notes:
-#### Procedure for locating the canvas storage pointer in a different SAIv2 version.
-The goal is the find a route from the canvas storage pointer to the canvas composite data.
-1. Open SAI.
-2. Open canvas with a color pattern in the upper left corner, for example:
-   Paint randomly colored pixels in the format of `BGRA` like the following (`A` will always be `00`).
-   ```
-   FF 30 00 00 00 46 FF 00 00 FF 91 00
-   ```
-3. Open Cheat Engine and attach to SAI.
-4. Run a scan for the byte array pattern above. You are looking for the pattern at a page aligned address, like `xxxx0000`. If you use at least 3 pixels (12 bytes), you'll usually end up with a single result. This address is the canvas composite data's first block.
-5. Save that found address to the address list.
-6. Create a new pointer map and save it (like pmap1.scandata).
-7. Save the canvas and close it, then reopen it.
-8. Repeat steps 4 to 7 while saving a new pointer map each time, at least 3 times total, however leave the last canvas open after saving the last map.
-9. Right click on the last address saved and run "Pointer scan for this address".
-10. Select "Use saved pointermap" and select the last pointer map saved.
-11. Select "Compare results with other saved pointermaps"
-12. Add each successive pointer map and its associated address.
-13. Select other options:
- - Only find paths with a static address
- - Don't include pointers with read-only nodes
- - No looping pointers
- - Max different offsets per node: 3
- - Maximum offset value: 4095
- - Max level: 7
-14. Click okay to run the scan. Hopefully a very short list appears, with maybe 20 to 30 entries.
-15. The address with a `0` in the `Offset 0` column is most likely the target. This may not always be true for every version, but it greatly narrows down the potential pointers for further analysis.
-
-Unless there is a major refactor, the layouts of structures do not seem to change much, so often adding support for another version is just searching for the canvas storage pointer location and deriving a new SAI API class from the previous version.
+基于 [cromachina/art-timelapse](https://github.com/cromachina/art-timelapse)，按 [GPLv3](LICENSE) 分发，详见[第三方声明](THIRD_PARTY_NOTICES.md)。发行包已构建，SAI2 实机录制未在发布阶段验证。

@@ -11,8 +11,14 @@ lang = None
 
 def set_locale(locale_code):
     global lang
-    with importlib.resources.path('art_timelapse.locales') as path:
-        lang = gettext.translation('art-timelapse', localedir=path, languages=[locale_code], fallback=locale_code == 'en')
+    try:
+        with importlib.resources.path('art_timelapse.locales') as path:
+            lang = gettext.translation('art-timelapse', localedir=path, languages=[locale_code], fallback=locale_code == 'en')
+    except ModuleNotFoundError:
+        # Source checkouts may not have generated translation resources yet.
+        if locale_code != 'en':
+            raise
+        lang = gettext.NullTranslations()
 
 set_locale('en')
 
