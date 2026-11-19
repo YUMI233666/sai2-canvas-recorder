@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-L6ddOnp1mzFucIjcuIS7lPuG+UY3mH8bwXzuDpV+HQU='; style-src 'self'; img-src 'self' blob: data:; connect-src 'self' blob: data:; object-src 'none'; base-uri 'none'">
+  <title>SAI2 工具包 · 3D 人偶</title>
+  <link rel="stylesheet" href="./studio.css">
+  <script type="importmap">
+{"imports":{"three":"./vendor/three.module.js"}}
+  </script>
+</head>
+<body>
+  <header>
+    <h1><img src="./icons/person-standing.svg" alt="">3D 人偶</h1>
+    <div class="commands">
+      <button id="fit" type="button" title="重置视角" aria-label="重置视角"><img src="./icons/focus.svg" alt=""></button>
+      <select id="export-resolution" aria-label="PNG 分辨率（长边）" title="PNG 分辨率（长边）">
+        <option value="1024">1024 px</option>
+        <option value="2048" selected>2048 px</option>
+        <option value="4096">4096 px</option>
+      </select>
+      <button id="export" class="primary" type="button" disabled><img src="./icons/download.svg" alt="">透明 PNG</button>
+    </div>
+  </header>
+  <main>
+    <section id="viewport" aria-label="3D 视图">
+      <output id="status" aria-live="polite">加载人偶中…</output>
+      <output id="export-status" aria-live="polite" hidden></output>
+      <div class="light-tool" role="group" aria-label="主光方向">
+        <button id="light-ball" type="button" disabled aria-label="旋转主光方向" title="旋转主光方向">
+          <svg viewBox="0 0 80 80" aria-hidden="true">
+            <circle class="light-disc" cx="40" cy="40" r="34"/>
+            <ellipse class="light-guide" cx="40" cy="40" rx="14" ry="34"/>
+            <ellipse class="light-guide" cx="40" cy="40" rx="34" ry="12"/>
+            <line class="light-ray" id="light-ray" x1="40" y1="40" x2="40" y2="40"/>
+            <circle class="light-marker" id="light-marker" cx="40" cy="40" r="5"/>
+          </svg>
+        </button>
+        <button id="light-reset" type="button" disabled title="重置主光方向" aria-label="重置主光方向"><img src="./icons/rotate-ccw.svg" alt=""></button>
+      </div>
+    </section>
+    <aside aria-label="姿势、相机和灯光">
+      <section>
+        <h2><img src="./icons/box.svg" alt=""><label for="model">模型</label></h2>
+        <div class="model-row">
+          <select id="model" disabled><option value="gray">原版灰模</option></select>
+          <button id="import" type="button" disabled title="导入本地模型" aria-label="导入本地模型"><img src="./icons/folder-open.svg" alt=""></button>
+          <input id="model-files" type="file" multiple hidden>
+        </div>
+        <output id="model-message" role="status"></output>
+        <details id="bone-map" hidden>
+          <summary>骨骼映射</summary>
+          <div id="bone-slots"></div>
+          <button id="apply-bones" type="button">应用骨骼映射</button>
+        </details>
+      </section>
+      <section>
+        <h2><img src="./icons/bone.svg" alt="">姿势</h2>
+        <div class="poses" id="poses">
+          <button data-pose="stand" aria-pressed="true">站立</button>
+          <button data-pose="walk" aria-pressed="false">行走</button>
+          <button data-pose="run" aria-pressed="false">跑步</button>
+          <button data-pose="sit" aria-pressed="false">坐姿</button>
+          <button data-pose="crouch" aria-pressed="false">蹲姿</button>
+          <button data-pose="reach" aria-pressed="false">抬手</button>
+          <button data-pose="rest" aria-pressed="false" hidden>初始姿势</button>
+        </div>
+        <label class="check"><input id="handles" type="checkbox" checked>关节控制点</label>
+      </section>
+      <section>
+        <h2><img src="./icons/bone.svg" alt="">关节角度</h2>
+        <div class="joint-row">
+          <label for="limb">部位</label>
+          <select id="limb"><option value="">未选择</option><option value="0">左手腕</option><option value="1">右手腕</option><option value="2">左脚踝</option><option value="3">右脚踝</option><option value="p0">左肘</option><option value="p1">右肘</option><option value="p2">左膝</option><option value="p3">右膝</option><option value="pelvis">胯部</option><option value="torso">躯干</option><option value="head">头部</option></select>
+          <button id="reset-joint" type="button" disabled title="重置所选关节角度" aria-label="重置所选关节角度"><img src="./icons/rotate-ccw.svg" alt=""></button>
+        </div>
+        <div id="angle-fields" hidden>
+        <label class="slider" for="joint-0"><span><span id="joint-0-label">手腕弯伸</span><output id="joint-0-val" for="joint-0">0°</output></span><input id="joint-0" type="range" aria-labelledby="joint-0-label"></label>
+        <label class="slider" for="joint-1"><span><span id="joint-1-label">手腕侧偏</span><output id="joint-1-val" for="joint-1">0°</output></span><input id="joint-1" type="range" aria-labelledby="joint-1-label"></label>
+        <label class="slider" for="joint-2"><span><span id="joint-2-label">手掌翻转</span><output id="joint-2-val" for="joint-2">0°</output></span><input id="joint-2" type="range" aria-labelledby="joint-2-label"></label>
+        </div>
+        <div id="pole-fields" hidden>
+          <label class="slider" for="pole"><span><span id="pole-label">肘部朝向</span><output for="pole" id="pole-val">0°</output></span><input id="pole" type="range" min="-150" max="150" value="0" aria-labelledby="pole-label"></label>
+        </div>
+        <div id="shoulder-fields" hidden>
+          <label class="slider" for="shoulder-lift"><span><span id="shoulder-label">肩部升降</span><output for="shoulder-lift" id="shoulder-lift-val">0°</output></span><input id="shoulder-lift" type="range" value="0" aria-labelledby="shoulder-label"></label>
+        </div>
+      </section>
+      <section>
+        <h2><img src="./icons/save.svg" alt="">自定义姿势</h2>
+        <form id="pose-save" class="pose-library-row">
+          <input id="pose-name" type="text" aria-label="姿势名称" placeholder="姿势名称" maxlength="40" required>
+          <button type="submit" title="保存当前姿势" aria-label="保存当前姿势"><img src="./icons/save.svg" alt=""></button>
+        </form>
+        <div class="pose-library-row">
+          <select id="saved-poses" aria-label="已保存的姿势"></select>
+          <button id="pose-load" type="button" disabled>载入</button>
+          <button id="pose-delete" type="button" disabled title="删除所选姿势" aria-label="删除所选姿势"><img src="./icons/trash-2.svg" alt=""></button>
+        </div>
+        <output id="pose-message" role="status" aria-live="polite"></output>
+      </section>
+      <section>
+        <h2><img src="./icons/camera.svg" alt="">相机</h2>
+        <div class="segmented" id="camera">
+          <button data-camera="persp" aria-pressed="true">透视</button>
+          <button data-camera="ortho" aria-pressed="false">正交</button>
+        </div>
+      </section>
+      <section>
+        <h2><img src="./icons/sun.svg" alt="">灯光</h2>
+        <label class="slider"><span>方向 <output for="azimuth" id="azimuth-val">38°</output></span><input id="azimuth" type="range" min="-180" max="180" step="0.1" value="38"></label>
+        <label class="slider"><span>高度 <output for="elevation" id="elevation-val">44°</output></span><input id="elevation" type="range" min="-80" max="85" step="0.1" value="44"></label>
+        <label class="slider"><span>主光 <output for="key" id="key-val">3.0</output></span><input id="key" type="range" min="0" max="5" step="0.1" value="3"></label>
+        <label class="slider"><span>补光 <output for="fill" id="fill-val">1.0</output></span><input id="fill" type="range" min="0" max="2.5" step="0.1" value="1"></label>
+      </section>
+    </aside>
+  </main>
+  <script type="module" src="./studio.js"></script>
+</body>
+</html>

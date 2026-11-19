@@ -17,9 +17,10 @@ from ttkbootstrap.widgets.scrolled import ScrolledFrame
 from . import __version__
 from .canvas_output import canvas_folders, create_canvas_folder
 from .config import SAMPLE_INTERVAL_ERROR, RecordingSettings, data_directory, load_settings, save_settings
+from .pose_gui import PosePanel
 from .encoder import merge_parts
 from .recording import Recorder
-from .source import (SaiSource, SourceSpec, connect, executable_hash, running_sai2)
+from .source import SaiSource, SourceSpec, capture_snapshot, connect, executable_hash, running_sai2
 from .window_source import SaiWindowSource
 
 
@@ -42,7 +43,7 @@ def label_for(mapping, value):
 class App(ttk.Window):
     def __init__(self):
         super().__init__(themename='darkly')
-        self.title(f'SAI2 画布录制 · {__version__}')
+        self.title(f'SAI2 绘画工具包 · {__version__}')
         self.geometry('570x780')
         self.minsize(520, 420)
         self.messages = Queue()
@@ -85,21 +86,14 @@ class App(ttk.Window):
         self.destination = tk.StringVar(value='')
         self._build()
         self.protocol('WM_DELETE_WINDOW', self._close)
-        self.bind('<F8>', lambda _: self._stop() if self._active() else self._start())
+        self.bind('<F8>', lambda _: self._stop() if self._active() else
+                  self._start() if self.tabs.select() == str(self.recording_page) else None)
         self.after(100, self._poll)
         self._refresh_processes()
 
     def _build(self):
-        main = ScrolledFrame(self, padding=PANEL_PADDING)
-        main.pack(fill='both', expand=True)
-        top = ttk.Frame(main)
-        top.pack(fill='x')
-        ttk.Label(top, text='画布录制', font=('Microsoft YaHei UI', 18, 'bold')).pack(side='left')
-        ttk.Checkbutton(top, text='窗口置顶', variable=self.topmost,
-                        command=lambda: self.attributes('-topmost', self.topmost.get())).pack(side='right')
-
-        target = ttk.Labelframe(main, text=' 选择画布 ', padding=10)
-        target.pack(fill='x', pady=(10, 0))
+        target = ttk.Labelframe(self, text=' SAI2 画布 ', padding=10)
+        target.pack(fill='x', padx=PANEL_PADDING, pady=(10, 8))
         row = ttk.Frame(target)
         row.pack(fill='x')
         self.process_box = ttk.Combobox(row, state='readonly')
@@ -113,9 +107,22 @@ class App(ttk.Window):
         self.connect_button.pack(side='left')
         self.discover_button = ttk.Button(row, text='识别此版本', command=lambda: self._connect(True), bootstyle='secondary')
         self.discover_button.pack(side='left', padx=8)
+        ttk.Checkbutton(row, text='置顶', variable=self.topmost,
+                        command=lambda: self.attributes('-topmost', self.topmost.get())).pack(side='right')
         self.canvas_box = ttk.Combobox(target, state='readonly')
         self.canvas_box.pack(fill='x', pady=(8, 0))
         self.canvas_box.bind('<<ComboboxSelected>>', lambda _: self._preview())
+        status = ttk.Label(target, textvariable=self.status)
+        status.pack(fill='x', pady=(4, 0))
+        target.bind('<Configure>', lambda event: status.configure(wraplength=max(1, event.width-22)))
+
+        self.tabs = ttk.Notebook(self)
+        self.tabs.pack(fill='both', expand=True)
+        self.recording_page = ttk.Frame(self.tabs)
+        self.tabs.add(self.recording_page, text='录制')
+        self.tabs.add(PosePanel(self.tabs), text='3D 人偶')
+        main = ScrolledFrame(self.recording_page, padding=PANEL_PADDING)
+        main.pack(fill='both', expand=True)
 
         preview = ttk.Frame(main, height=PREVIEW_SIZE[1])
         preview.pack(fill='x', pady=10)
@@ -171,8 +178,6 @@ class App(ttk.Window):
         self.pause_button.pack(side='left', padx=8)
         self.stop_button = ttk.Button(buttons, text='停止并导出', command=self._stop, state='disabled', bootstyle='danger')
         self.stop_button.pack(side='left', fill='x', expand=True)
-        status = ttk.Label(main, textvariable=self.status)
-        status.pack(anchor='w', fill='x')
         metrics = ttk.Label(main, textvariable=self.metrics, bootstyle='secondary')
         metrics.pack(anchor='w', pady=4)
         hint = ttk.Label(main, textvariable=self.hint, bootstyle='secondary')
@@ -188,7 +193,7 @@ class App(ttk.Window):
             if width == wrap_width:
                 return
             wrap_width = width
-            for label in (status, metrics, hint, destination):
+            for label in (metrics, hint, destination):
                 label.configure(wraplength=width)
 
         main.bind('<Configure>', wrap_status, add='+')
@@ -198,7 +203,7 @@ class App(ttk.Window):
         self.folder_button.pack(side='left')
         self.recover_button = ttk.Button(footer, text='恢复分段', command=self._recover, bootstyle='link')
         self.recover_button.pack(side='left')
-        self.diagnostic_button = ttk.Button(footer, text='保存诊断', command=self._diagnostic, bootstyle='link')
+        self.diagnostic_button = ttk.Button(row, text='保存诊断', command=self._diagnostic, bootstyle='link')
         self.diagnostic_button.pack(side='right')
 
         def scroll_over_combo(event):
@@ -208,7 +213,9 @@ class App(ttk.Window):
                 main.yview_scroll(-round(event.delta / 120))
             return 'break'
 
-        for widget in (self.process_box, self.canvas_box, *self.param_widgets):
+        for widget in (self.process_box, self.canvas_box):
+            widget.bind('<MouseWheel>', lambda _: 'break')
+        for widget in self.param_widgets:
             widget.bind('<MouseWheel>', scroll_over_combo)
         main.enable_scrolling()
         self._mode_changed()
@@ -253,6 +260,8 @@ class App(ttk.Window):
         self.preview_identity = None
 
     def _connect(self, discover):
+        if self.closing or self.busy or self._active():
+            return
         index = self.process_box.current()
         if not 0 <= index < len(self.processes):
             self.status.set('请先选择一个 SAI2 进程。')
@@ -290,13 +299,7 @@ class App(ttk.Window):
             spec = self._spec()
         except ValueError:
             return
-        def action():
-            source = SaiSource(spec)
-            try:
-                return source.capture()
-            finally:
-                source.close()
-        self._run_task(action, self._show_image)
+        self._run_task(lambda: capture_snapshot(spec), self._show_image)
 
     def _show_image(self, image):
         rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)

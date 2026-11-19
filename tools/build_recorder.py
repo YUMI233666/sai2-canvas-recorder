@@ -28,6 +28,11 @@ def main():
     external_ffmpeg = parser.parse_args().external_ffmpeg
     if sys.platform != 'win32':
         raise SystemExit('Build on 64-bit Windows with the project virtual environment.')
+    pose = ROOT / 'build' / 'pose-studio'
+    pose_files = ('SAI2PoseStudio.exe', 'SAI2PoseStudio.exe.config', 'WebView2Loader.dll',
+                  'Microsoft.Web.WebView2.Core.dll', 'Microsoft.Web.WebView2.WinForms.dll')
+    if not all((pose / name).is_file() for name in (*pose_files, 'web/mannequin.glb')):
+        raise SystemExit('Build Pose Studio first with build_pose_studio.ps1.')
     env = dict(os.environ, PYINSTALLER_CONFIG_DIR=str(ROOT / '.cache' / 'pyinstaller'))
     output_dir = ROOT / 'dist' / 'github' if external_ffmpeg else ROOT / 'dist'
     release_dir = output_dir / __version__
@@ -47,8 +52,16 @@ def main():
                  'THIRD_PARTY_NOTICES.md', 'CHANGES_RECORDER.md'):
         shutil.copy2(ROOT / name, target / name)
     shutil.copytree(ROOT / 'docs', target / 'docs', dirs_exist_ok=True)
+    pose_target = target / 'pose-studio'
+    pose_target.mkdir(exist_ok=True)
+    for name in pose_files:
+        shutil.copy2(pose / name, pose_target / name)
+    shutil.copytree(pose / 'web', pose_target / 'web', dirs_exist_ok=True)
     licenses = target / 'licenses'
     licenses.mkdir(exist_ok=True)
+    webview = ROOT / '.cache' / 'nuget' / 'microsoft.web.webview2' / '1.0.3595.46'
+    for name in ('LICENSE.txt', 'NOTICE.txt'):
+        shutil.copy2(webview / name, licenses / f'WebView2-{name}')
     packages = []
     # Keep notices of the build environment as a conservative superset of bundled packages.
     for dist in metadata.distributions():
@@ -111,10 +124,12 @@ def main():
         return
     source = ROOT / 'dist' / f'SAI2CanvasRecorder-{__version__}-source.zip'
     excluded = {'.git', '.venv', '.runtime', '.cache', 'build', 'dist', '__pycache__',
-                'validation', 'recordings', '.agents', '.aws'}
+                'validation', 'recordings', 'downloads', '.agents', '.aws', '.codex', 'node_modules'}
     with zipfile.ZipFile(source, 'w', zipfile.ZIP_DEFLATED) as bundle:
         for directory, folders, files in os.walk(ROOT):
             folders[:] = [p for p in folders if p not in excluded]
+            if Path(directory) == ROOT / 'pose_studio' / 'host':
+                folders[:] = [p for p in folders if p not in ('bin', 'obj')]
             for name in files:
                 if name.startswith(('recorder-settings', 'recorder-profiles')) or name.endswith(('.pyc', '.log')):
                     continue

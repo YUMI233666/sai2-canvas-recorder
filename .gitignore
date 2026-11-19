@@ -133,3 +133,6 @@ recordings/
 validation/
 recorder-settings.json
 recorder-profiles.json
+node_modules/
+pose_studio/host/bin/
+pose_studio/host/obj/

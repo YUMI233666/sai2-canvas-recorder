@@ -308,6 +308,14 @@ class SaiSource:
         self.process.close()
 
 
+def capture_snapshot(spec: SourceSpec):
+    source = SaiSource(spec)
+    try:
+        return source.capture()
+    finally:
+        source.close()
+
+
 def connect(pid, discover=False, progress=None):
     with ReadOnlyProcess(pid) as process:
         fingerprint = executable_hash(process.exe)
