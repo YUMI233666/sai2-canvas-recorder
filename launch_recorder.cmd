@@ -2,8 +2,8 @@
 setlocal
 cd /d "%~dp0"
 for %%D in (dist\github dist) do (
-    if exist "%%D\0.2.0\SAI2CanvasRecorder\SAI2CanvasRecorder.exe" (
-        start "" "%%D\0.2.0\SAI2CanvasRecorder\SAI2CanvasRecorder.exe"
+    if exist "%%D\0.2.1\SAI2CanvasRecorder\SAI2CanvasRecorder.exe" (
+        start "" "%%D\0.2.1\SAI2CanvasRecorder\SAI2CanvasRecorder.exe"
         exit /b 0
     )
 )

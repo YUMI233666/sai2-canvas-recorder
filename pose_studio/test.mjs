@@ -1,15 +1,21 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname, resolve, sep } from 'node:path';
 import { chromium } from 'playwright';
+import { referenceModels } from './web/reference-models.js';
 
-const testLocalModels = process.argv.includes('--test-local-models');
+const testReferenceModels = process.argv.includes('--test-reference-models');
 const buildName = 'pose-studio';
-const root = resolve('../build',buildName,'web');
-const output = resolve('../validation',testLocalModels ? 'pose-studio-local-models' : buildName);
+const root = resolve(process.env.SAI2_POSE_TEST_WEB ?? resolve('../build',buildName,'web'));
+const output = resolve('../validation',testReferenceModels ? 'pose-studio-reference-models' : buildName);
 const mime = {'.html':'text/html','.js':'text/javascript','.css':'text/css',
-              '.svg':'image/svg+xml','.glb':'model/gltf-binary'};
+              '.svg':'image/svg+xml','.glb':'model/gltf-binary','.vrm':'model/gltf-binary'};
+
+for (const {file,sha256} of referenceModels) {
+  assert.equal(createHash('sha256').update(await readFile(resolve(root,file))).digest('hex'),sha256,file);
+}
 
 function splitGlb(bytes) {
   const end = 20 + bytes.readUInt32LE(12);
@@ -179,15 +185,20 @@ try {
       assert.equal((await pixels()).hash,before.hash);
     };
     await checkShoulders('gray');
-    if (testLocalModels) {
-      const picker = page.locator('#model');
+    const picker = page.locator('#model');
+    const waitForModel = () => page.waitForFunction(() => !document.querySelector('#model').disabled);
+    const chooseModel = async id => {
+      await picker.selectOption(id);
+      await waitForModel();
+      assert.equal(await picker.inputValue(),id,await page.locator('#status').textContent());
+    };
+    assert.deepEqual(await picker.locator('option').evaluateAll(options=>options.map(o=>o.value)),
+      ['gray',...referenceModels.map(model=>model.id)]);
+    if (testReferenceModels) {
       const snapshots = [];
-      for (const id of ['hinzka-male','hinzka-female']) {
-        const file = id+'.vrm';
-        await page.locator('#model-files').setInputFiles(resolve('../downloads/hinzka',file));
-        await page.waitForFunction(() => !document.querySelector('#model').disabled);
-        assert.equal(await picker.inputValue(),'imported',await page.locator('#status').textContent());
-        assert.equal(await picker.locator('option:checked').textContent(),file);
+      for (const {id,label} of referenceModels) {
+        await chooseModel(id);
+        assert.equal(await picker.locator('option:checked').textContent(),label);
         assert.equal(await page.locator('#status').isHidden(),true);
         assert.match(await page.locator('#model-message').textContent(),/已绑定/);
         assert.match(await page.locator('[data-bone=spine01] option:checked').textContent(),/^J_Bip_C_UpperChest /);
@@ -594,11 +605,10 @@ try {
     page.once('dialog',dialog=>dialog.accept());
     await page.locator('#pose-delete').click();
     assert.equal(await poseList.locator('option').count(),1);
-    const picker = page.locator('#model');
     const seen = new Set();
     await page.locator('#handles').uncheck();
-    for (const id of ['boy','man','child','girl','woman']) {
-      await picker.selectOption(id);
+    for (const {id} of referenceModels) {
+      await chooseModel(id);
       const neutral = await pixels();
       assert(neutral.count>300 && neutral.count<12000,id+': '+JSON.stringify(neutral));
       assert(neutral.bounds[1]>1 && neutral.bounds[3]<142,id+': '+JSON.stringify(neutral));
@@ -607,19 +617,28 @@ try {
       await page.locator('[data-pose=reach]').click();
       assert.notEqual((await pixels()).hash,neutral.hash);
     }
-    assert.equal(seen.size,5);
+    assert.equal(seen.size,referenceModels.length);
     if (name==='desktop') {
-      await poseName.fill('成女参考');
+      const label = '女性参考';
+      await poseName.fill(label);
       await savePose.click();
-      await picker.selectOption('child');
+      await chooseModel('hinzka-male');
       assert.equal(await poseList.locator('option').count(),1);
-      await picker.selectOption('woman');
-      await poseList.selectOption('成女参考');
-      await page.locator('#handles').check();
       const original = await readFile(resolve(root,'mannequin.glb'));
       const files = page.locator('#model-files');
       const modelMessage = page.locator('#model-message');
-      const waitImport = () => page.waitForFunction(() => !document.querySelector('#model').disabled);
+      const waitImport = waitForModel;
+      await files.setInputFiles(resolve(root,'hinzka-female.vrm'));
+      await waitImport();
+      assert.equal(await picker.inputValue(),'imported');
+      await poseList.selectOption(label);
+      await page.locator('#pose-load').click();
+      const sharedPose = await pixels();
+      await chooseModel('hinzka-female');
+      await poseList.selectOption(label);
+      await page.locator('#pose-load').click();
+      assert.equal((await pixels()).hash,sharedPose.hash);
+      await page.locator('#handles').check();
       const assetFile = (name,buffer) => ({name,mimeType:'application/octet-stream',buffer});
       await files.setInputFiles(assetFile('fixture.glb',original));
       await waitImport();
@@ -682,7 +701,7 @@ try {
       assert.match(await modelMessage.textContent(),/仅可预览/);
       assert((await pixels()).count>200);
     }
-    results.push({name,start,moved,stepped,lit,ballLit,ortho,orbited,wristAngle,poleAngle,torsoAngle,headAngle,footAngle,pelvisAngle,presets:hashes.size,mannequins:seen.size});
+    results.push({name,start,moved,stepped,lit,ballLit,ortho,orbited,wristAngle,poleAngle,torsoAngle,headAngle,footAngle,pelvisAngle,presets:hashes.size,referenceModels:seen.size});
     await page.close();
   }
   await writeFile(resolve(output,'results.json'),JSON.stringify(results,null,2));

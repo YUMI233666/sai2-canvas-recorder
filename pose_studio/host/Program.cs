@@ -15,7 +15,14 @@ namespace SAI2PoseStudio
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new Studio(args.Length == 2 && args[0] == "--smoke-test" ? args[1] : null));
+            var smoke = args.Length >= 2 && args[0] == "--smoke-test";
+            var model = smoke && args.Length == 3 ? args[2] : null;
+            if (model != null && model != "hinzka-male" && model != "hinzka-female")
+            {
+                Environment.ExitCode = 1;
+                return;
+            }
+            Application.Run(new Studio(smoke ? args[1] : null, model));
         }
     }
 
@@ -24,11 +31,13 @@ namespace SAI2PoseStudio
         private const string HostName = "studio.sai2.local";
         private readonly WebView2 web = new WebView2 { Dock = DockStyle.Fill };
         private readonly string smokeProfile;
+        private readonly string smokeModel;
         private bool smokeExport;
 
-        internal Studio(string smokeProfile)
+        internal Studio(string smokeProfile, string smokeModel)
         {
             this.smokeProfile = smokeProfile;
+            this.smokeModel = smokeModel;
             Text = "SAI2 工具包 · 3D 人偶";
             ClientSize = new Size(1000, 690);
             MinimumSize = new Size(420, 510);
@@ -87,9 +96,18 @@ namespace SAI2PoseStudio
                         ready.Stop();
                         try
                         {
+                            var selectModel = smokeModel == null ? "" :
+                                "const picker = document.querySelector('#model:enabled'); " +
+                                "if (!picker) return false; " +
+                                "if (!picker.dataset.smokeSelected) { " +
+                                "picker.value = '" + smokeModel + "'; picker.dataset.smokeSelected = 'true'; " +
+                                "picker.dispatchEvent(new Event('change')); return false; } " +
+                                "if (picker.value !== '" + smokeModel + "' || !document.querySelector('#status').hidden) return false; " +
+                                "document.querySelector('#export-resolution').value = '4096'; ";
                             var result = await view.ExecuteScriptAsync(
                                 "(() => { const button = document.querySelector('#export:enabled'); " +
                                 "if (!button || !document.querySelector('canvas')) return false;" +
+                                selectModel +
                                 "button.click(); return true; })()");
                             if (IsDisposed) return;
                             if (result != "true") ready.Start();

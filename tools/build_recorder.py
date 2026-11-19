@@ -31,7 +31,9 @@ def main():
     pose = ROOT / 'build' / 'pose-studio'
     pose_files = ('SAI2PoseStudio.exe', 'SAI2PoseStudio.exe.config', 'WebView2Loader.dll',
                   'Microsoft.Web.WebView2.Core.dll', 'Microsoft.Web.WebView2.WinForms.dll')
-    if not all((pose / name).is_file() for name in (*pose_files, 'web/mannequin.glb')):
+    model_files = ('web/mannequin.glb', 'web/hinzka-male.vrm', 'web/hinzka-female.vrm',
+                   'web/Hinzka-NOTICE.md')
+    if not all((pose / name).is_file() for name in (*pose_files, *model_files)):
         raise SystemExit('Build Pose Studio first with build_pose_studio.ps1.')
     env = dict(os.environ, PYINSTALLER_CONFIG_DIR=str(ROOT / '.cache' / 'pyinstaller'))
     output_dir = ROOT / 'dist' / 'github' if external_ffmpeg else ROOT / 'dist'

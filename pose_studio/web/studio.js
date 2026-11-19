@@ -3,7 +3,7 @@ import { OrbitControls } from './vendor/controls/OrbitControls.js';
 import { TransformControls } from './vendor/controls/TransformControls.js';
 import { GLTFLoader } from './vendor/loaders/GLTFLoader.js';
 import { jointRanges, jointWorldRotation, PoseRig, setJointWorldRotation, shoulderRange, shoulderSlots } from './rig.js';
-import { createMannequin, mannequins } from './mannequins.js';
+import { referenceModels } from './reference-models.js';
 import { boneSlots, disposeModel, importModel, mappingIssue, requiredBoneSlots } from './model-import.js';
 
 const $ = id => document.getElementById(id);
@@ -18,10 +18,6 @@ let renderer, rig, camera, controls, activeDrag, frame = 0, width = 1, height = 
 let mode = 'persp';
 let activeModel, importedModel, refreshPoses;
 const models = new Map();
-const hinzkaKeys = {
-  'import-7526838f4a45086a1d0abb23e9f38ad3f0103889f1efa70d2605ef25e7e6ef99':'hinzka-male',
-  'import-36d6d242999d580bd0d3bcd8656bb2d4d5d4839f187d8198226bda905e1d9114':'hinzka-female',
-};
 const handles = [];
 const joints = new Map();
 const rotationTarget = new THREE.Object3D();
@@ -430,10 +426,10 @@ function activateModel(entry,pose) {
 }
 
 function adaptHinzkaImport(entry) {
-  const key = hinzkaKeys[entry.key];
-  if (!key) return;
+  const reference = referenceModels.find(({sha256})=>entry.key === 'import-'+sha256);
+  if (!reference) return;
   // Keep trial-edition poses and mappings accessible for the exact same model.
-  entry.key = key;
+  entry.key = reference.id;
   entry.mapping.spine01 = entry.bones.find(bone => bone.name === 'J_Bip_C_UpperChest');
   const lit = new Map();
   const litMaterial = material => {
@@ -453,12 +449,26 @@ function adaptHinzkaImport(entry) {
   for (const material of lit.keys()) material.dispose();
 }
 
+function restoreModelBinding(entry) {
+  adaptHinzkaImport(entry);
+  if (!entry.bones.length) return;
+  try {
+    const stored = JSON.parse(localStorage.getItem('sai2.bones.v1:'+entry.key));
+    if (Array.isArray(stored) && [requiredBoneSlots,boneSlots.length].includes(stored.length)) {
+      const saved = {...entry.mapping,...Object.fromEntries(stored.map((index,i)=>[boneSlots[i][0],entry.bones[index]]))};
+      if (!mappingIssue(saved)) entry.mapping = saved;
+    }
+  } catch {}
+  try { bindImported(entry,entry.mapping); }
+  catch (error) { entry.issue = error.message; }
+}
+
 function setupModels(gray) {
   const picker = $('model');
   const open = $('import'), files = $('model-files');
   models.set('gray',gray);
-  picker.append(...Object.entries(mannequins).map(([id,name])=>new Option(name,id)));
-  picker.addEventListener('change',() => {
+  picker.append(...referenceModels.map(({id,label})=>new Option(label,id)));
+  picker.addEventListener('change',async () => {
     if (rotation.dragging || activeDrag) {
       picker.value = activeModel === importedModel ? 'imported' : activeModel.key;
       return;
@@ -470,11 +480,32 @@ function setupModels(gray) {
       activateModel(cached);
       return;
     }
-    const model = createMannequin(key);
-    const height = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3()).y;
-    const entry = {key,model,rig:new PoseRig(model,{legacy:false,height})};
-    models.set(key,entry);
-    activateModel(entry,'stand');
+    const reference = referenceModels.find(({id})=>id===key);
+    if (!reference) return;
+    picker.disabled = open.disabled = true;
+    status.hidden = false;
+    status.value = '正在载入模型…';
+    let entry;
+    try {
+      const response = await fetch('./'+reference.file);
+      if (!response.ok) throw new Error('无法读取 '+reference.file);
+      entry = await importModel([new File([await response.blob()],reference.file)]);
+      if (entry.key !== 'import-'+reference.sha256) throw new Error('模型文件校验失败');
+      restoreModelBinding(entry);
+      if (!entry.rig) throw new Error(entry.issue || '模型没有可用的骨骼');
+      activateModel(entry,'rest');
+      models.set(key,entry);
+      status.hidden = true;
+    } catch (error) {
+      if (entry && activeModel !== entry) {
+        disposeModel(entry.model);
+        entry.dispose();
+      }
+      picker.value = activeModel === importedModel ? 'imported' : activeModel.key;
+      status.value = '载入失败：'+error.message;
+    } finally {
+      picker.disabled = open.disabled = false;
+    }
   });
   open.addEventListener('click',()=>files.click());
   files.addEventListener('change',async () => {
@@ -486,18 +517,7 @@ function setupModels(gray) {
     status.value = '正在载入模型…';
     try {
       const entry = await importModel(selected);
-      adaptHinzkaImport(entry);
-      if (entry.bones.length) {
-        try {
-          const stored = JSON.parse(localStorage.getItem('sai2.bones.v1:'+entry.key));
-          if (Array.isArray(stored) && [requiredBoneSlots,boneSlots.length].includes(stored.length)) {
-            const saved = {...entry.mapping,...Object.fromEntries(stored.map((index,i)=>[boneSlots[i][0],entry.bones[index]]))};
-            if (!mappingIssue(saved)) entry.mapping = saved;
-          }
-        } catch {}
-        try { bindImported(entry,entry.mapping); }
-        catch (error) { entry.issue = error.message; }
-      }
+      restoreModelBinding(entry);
       const previous = importedModel;
       importedModel = entry;
       picker.querySelector('[value="imported"]')?.remove();
