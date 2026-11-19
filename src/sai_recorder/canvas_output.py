@@ -22,18 +22,19 @@ def _canvas_metadata(directory: Path):
     return None
 
 
-def canvas_folders(root: Path, name: str, width: int, height: int):
+def canvas_folders(root: Path, name: str | None = None, width: int | None = None, height: int | None = None):
     if not root.exists():
         return []
     folders = []
     for path in root.iterdir():
         if path.is_dir() and (metadata := _canvas_metadata(path)) is not None:
-            match = (metadata.get('name'), metadata.get('width'), metadata.get('height')) == (name, width, height)
+            identity = (metadata.get('name'), metadata.get('width'), metadata.get('height'))
+            match = name is not None and identity == (name, width, height)
             folders.append((path, match))
     return sorted(folders, key=lambda item: (not item[1], item[0].name.casefold()))
 
 
-def create_canvas_folder(root: Path, name: str, width: int, height: int) -> Path:
+def create_canvas_folder(root: Path, name: str, width: int | None = None, height: int | None = None) -> Path:
     safe_name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', '_', name).strip(' .')[:48].rstrip(' .')
     folder = root / f'画布-{safe_name or "未命名"}-{uuid.uuid4().hex[:8]}'
     folder.mkdir(parents=True)

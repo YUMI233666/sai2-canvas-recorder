@@ -1,4 +1,5 @@
 from dataclasses import asdict
+from functools import partial
 import json
 import logging
 import os
@@ -80,7 +81,7 @@ class App(ttk.Window):
         self.segment = settings.segment_seconds
         self.output_dir = tk.StringVar(value=settings.output_dir)
         self.topmost = tk.BooleanVar(value=False)
-        self.status = tk.StringVar(value=self.last_error or '请打开 SAI2 和画布，再点击“连接画布”。')
+        self.status = tk.StringVar(value=self.last_error or '正在查找 SAI2……')
         self.hint = tk.StringVar(value=CAPTURE_HINTS[settings.capture_source])
         self.metrics = tk.StringVar(value='尚未开始录制')
         self.destination = tk.StringVar(value='')
@@ -92,7 +93,7 @@ class App(ttk.Window):
         self._refresh_processes()
 
     def _build(self):
-        target = ttk.Labelframe(self, text=' SAI2 画布 ', padding=10)
+        target = ttk.Labelframe(self, text=' SAI2 录制目标 ', padding=10)
         target.pack(fill='x', padx=PANEL_PADDING, pady=(10, 8))
         row = ttk.Frame(target)
         row.pack(fill='x')
@@ -159,8 +160,7 @@ class App(ttk.Window):
         ttk.Label(params, text='帧率越高，对电脑性能要求越高；60 FPS 请先自行试录。',
                   bootstyle='secondary').grid(row=6, column=0, columnspan=4, sticky='w', pady=(2, 0))
         self.mode.trace_add('write', lambda *_: self._mode_changed())
-        self.capture_source.trace_add('write', lambda *_: self.hint.set(
-            CAPTURE_HINTS[CAPTURE_SOURCES[self.capture_source.get()]]))
+        self.capture_source.trace_add('write', self._capture_source_changed)
 
         path_row = ttk.Frame(main)
         path_row.pack(fill='x', pady=(10, 4))
@@ -239,15 +239,43 @@ class App(ttk.Window):
     def _refresh_processes(self):
         def result(items):
             self.processes = items
-            self.process_box['values'] = [f"SAI2 · PID {p['pid']} · {Path(p['exe']).parent.name}" for p in items]
-            self._process_selected()
+            self.process_box['values'] = [f"SAI2 · PID {p['pid']}" +
+                                          (f" · {Path(p['exe']).parent.name}" if p['exe'] else '') for p in items]
             if len(items) == 1:
                 self.process_box.current(0)
-                self.status.set('已找到 SAI2，请点击“连接画布”。')
             else:
                 self.process_box.set('')
-                self.status.set('请选择要连接的 SAI2 进程。' if items else '没有找到 SAI2，请打开后刷新。')
+            self._process_selected()
         self._run_task(running_sai2, result)
+
+    def _selected_process(self):
+        index = self.process_box.current()
+        return self.processes[index] if 0 <= index < len(self.processes) else None
+
+    def _window_mode(self):
+        return CAPTURE_SOURCES[self.capture_source.get()] == 'window'
+
+    def _show_target_status(self):
+        window = self._window_mode()
+        self.preview_identity = None
+        self.preview_label.configure(image='', text='等待窗口采集' if window else '连接后显示完整画布预览')
+        if not self.processes:
+            self.status.set('没有找到 SAI2，请打开后刷新。')
+        elif self._selected_process() is None:
+            self.status.set('请选择 SAI2 进程。')
+        elif window:
+            self.status.set('窗口录制就绪，无需连接画布。')
+        elif self.canvases:
+            self.status.set(f'已连接，找到 {len(self.canvases)} 张画布。')
+        else:
+            self.status.set('待连接画布。')
+
+    def _capture_source_changed(self, *_):
+        self.hint.set(CAPTURE_HINTS[CAPTURE_SOURCES[self.capture_source.get()]])
+        self._show_target_status()
+        self._controls()
+        if not self._window_mode() and self.canvases:
+            self._preview()
 
     def _process_selected(self, *_):
         self.canvas_destinations.clear()
@@ -256,17 +284,16 @@ class App(ttk.Window):
         self.canvases = []
         self.canvas_box['values'] = []
         self.canvas_box.set('')
-        self.preview_label.configure(image='', text='连接后显示完整画布预览')
-        self.preview_identity = None
+        self._show_target_status()
 
     def _connect(self, discover):
-        if self.closing or self.busy or self._active():
+        if self.closing or self.busy or self._active() or self._window_mode():
             return
-        index = self.process_box.current()
-        if not 0 <= index < len(self.processes):
+        selected = self._selected_process()
+        if selected is None:
             self.status.set('请先选择一个 SAI2 进程。')
             return
-        pid = self.processes[index]['pid']
+        pid = selected['pid']
         self._process_selected()
         self.status.set('正在只读识别此版本，请保持至少一张画布打开。' if discover else '正在连接画布……')
         def progress(text):
@@ -323,56 +350,71 @@ class App(ttk.Window):
                                  container=self.container.get().lower(), output_dir=self.output_dir.get(),
                                  skip_unchanged=self.skip.get(), segment_seconds=self.segment).validate()
 
-    def _select_canvas_folder(self, root, canvas):
-        folders = canvas_folders(root, canvas.name, canvas.width, canvas.height)
-        key = (root, canvas)
-        previous = self.canvas_destinations.get(key)
-        if previous is not None and any(path == previous for path, _ in folders):
-            return previous
-        if folders:
+    def _select_canvas_folder(self, root, canvas=None):
+        folders = canvas_folders(root, canvas.name, canvas.width, canvas.height) if canvas else canvas_folders(root)
+        if canvas:
+            previous = self.canvas_destinations.get((root, canvas))
+            if previous is not None and any(path == previous for path, _ in folders):
+                return previous
+        self.choosing_folder = True
+        try:
             new = '新建画布目录'
-            choices = {path.name: path for path, _ in folders}
-            matched = [path.name for path, match in folders if match]
-            self.choosing_folder = True
-            try:
+            if folders:
+                choices = {path.name: path for path, _ in folders}
+                matched = [path.name for path, match in folders if match]
+                prompt = f'当前画布：{canvas.label}\n' if canvas else ''
                 choice = Querybox.get_item(
-                    prompt=f'当前画布：{canvas.label}\n请选择已有目录，或新建画布目录。',
+                    prompt=prompt+'请选择已有目录，或新建画布目录。',
                     title='选择画布输出目录', initialvalue=matched[0] if len(matched) == 1 else new,
                     items=[new, *choices], parent=self)
-            finally:
-                self.choosing_folder = False
-            if choice is None:
+                if choice in choices:
+                    return choices[choice]
+                if choice != new:
+                    return None
+            if canvas:
+                return create_canvas_folder(root, canvas.name, canvas.width, canvas.height)
+            name = Querybox.get_string(prompt='输入要归档的作品名称。', title='新建画布目录', parent=self)
+            if name is None:
                 return None
-            if choice in choices:
-                return choices[choice]
-            if choice != new:
-                return None
-        return create_canvas_folder(root, canvas.name, canvas.width, canvas.height)
+            if not name.strip():
+                raise ValueError('作品名称不能为空。')
+            return create_canvas_folder(root, name.strip())
+        finally:
+            self.choosing_folder = False
 
     def _start(self):
         if self.closing or self.busy or self.choosing_folder or self._active():
             return
         try:
-            spec = self._spec()
             settings = self._settings()
             root = Path(settings.output_dir).expanduser().resolve()
-            folder = self._select_canvas_folder(root, spec.canvas)
+            spec = None
+            if settings.capture_source == 'window':
+                target = self._selected_process()
+                if target is None:
+                    raise ValueError('请先选择要录制的 SAI2 进程。')
+                pid, created = target['pid'], target['created']
+                if created is None:
+                    raise ValueError('无法确认 SAI2 进程，请刷新并检查录制器和 SAI2 的运行权限。')
+                folder = self._select_canvas_folder(root)
+                description = {'window': {'pid': pid}}
+                open_source = partial(SaiWindowSource, pid, created)
+            else:
+                spec = self._spec()
+                folder = self._select_canvas_folder(root, spec.canvas)
+                description = {'profile': asdict(spec.profile), 'canvas': asdict(spec.canvas)}
+                open_source = partial(SaiSource, spec)
             if folder is None:
                 return
             save_settings(settings)
             self.saved_interval = settings.interval
-            def open_source():
-                if settings.capture_source == 'window':
-                    return SaiWindowSource(spec.pid, spec.process_created)
-                return SaiSource(spec)
-
-            self.recorder = Recorder(open_source, settings, folder,
-                                     {'profile': asdict(spec.profile), 'canvas': asdict(spec.canvas)})
+            self.recorder = Recorder(open_source, settings, folder, description)
             self.reported_finished = False
             self.destination.set(str(folder))
             self.last_error = None
             self.recorder.start()
-            self.canvas_destinations[(root, spec.canvas)] = folder
+            if spec is not None:
+                self.canvas_destinations[(root, spec.canvas)] = folder
             self._controls()
         except Exception as exc:
             self.last_error = str(exc)
@@ -403,10 +445,12 @@ class App(ttk.Window):
         locked = active or self.busy
         for widget in self.param_widgets:
             widget.configure(state='disabled' if locked else 'readonly')
-        for widget in (self.process_box, self.canvas_box):
-            widget.configure(state='disabled' if locked else 'readonly')
-        for widget in (self.refresh_button, self.connect_button, self.discover_button,
-                       self.browse_button, self.recover_button, self.diagnostic_button):
+        self.process_box.configure(state='disabled' if locked else 'readonly')
+        canvas_locked = locked or self._window_mode()
+        self.canvas_box.configure(state='disabled' if canvas_locked else 'readonly')
+        for widget in (self.connect_button, self.discover_button):
+            widget.configure(state='disabled' if canvas_locked else 'normal')
+        for widget in (self.refresh_button, self.browse_button, self.recover_button, self.diagnostic_button):
             widget.configure(state='disabled' if locked else 'normal')
         self.output_entry.configure(state='disabled' if locked else 'normal')
         self.start_button.configure(state='disabled' if locked else 'normal')
@@ -513,13 +557,16 @@ class App(ttk.Window):
                   'pid': self.connected_pid, 'error': self.last_error,
                   'canvas_sizes': [(c.width, c.height) for c in self.canvases],
                   'statistics': self.recorder.snapshot() if self.recorder else None}
-        index = self.process_box.current()
-        if 0 <= index < len(self.processes):
-            result['selected_process'] = self.processes[index]
-            try:
-                result['executable_md5'] = executable_hash(self.processes[index]['exe'])
-            except OSError as exc:
-                result['fingerprint_error'] = str(exc)
+        selected = self._selected_process()
+        if selected is not None:
+            result['selected_process'] = selected
+            if selected['exe']:
+                try:
+                    result['executable_md5'] = executable_hash(selected['exe'])
+                except OSError as exc:
+                    result['fingerprint_error'] = str(exc)
+            else:
+                result['fingerprint_error'] = '无法获取程序路径。'
         try:
             Path(path).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding='utf-8')
             self.status.set('诊断已保存。该文件不包含画布图像或内存转储。')

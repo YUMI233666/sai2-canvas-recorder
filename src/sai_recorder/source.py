@@ -88,10 +88,10 @@ class Canvas:
 
 def running_sai2():
     result = []
-    for p in psutil.process_iter(['pid', 'name', 'exe']):
+    for p in psutil.process_iter(['pid', 'name', 'exe', 'create_time']):
         try:
             if p.info['name'].lower() == 'sai2.exe':
-                result.append({'pid': p.pid, 'exe': p.info['exe']})
+                result.append({'pid': p.pid, 'exe': p.info['exe'], 'created': p.info['create_time']})
         except (psutil.Error, AttributeError):
             continue
     return sorted(result, key=lambda p: p['pid'])

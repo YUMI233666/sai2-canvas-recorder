@@ -1,6 +1,8 @@
-# SAI2 绘画工具包 0.2.1
+# SAI2 绘画工具包 0.2.2-alpha.1
 
 这是 Windows x64 上的独立工具，不是安装进 SAI2 的插件。「录制」和「3D 人偶」包含在同一个 Windows 发行包内，通过主窗口的两个分页进入。
+
+本文以当前源码 `0.2.2-alpha.1` 为准。GitHub 正式版 `0.2.1` 尚未包含免版本识别的窗口录制，两种来源都需要连接画布。
 
 ## 3D 人偶
 
@@ -30,9 +32,9 @@
 
 ## 开始录制
 
-1. 在已构建的本地项目中可双击 `launch_recorder.cmd`。使用 [GitHub 发行包](https://github.com/YUMI233666/sai2-canvas-recorder/releases) 时，下载名称带 `-external-ffmpeg.zip` 的 Windows 包并完整解压（保留 `_internal`）。无需另装 Python；请将带 `libx264` 的 [Windows 版 FFmpeg](https://ffmpeg.org/download.html#build-windows) 中的 `ffmpeg.exe` 放在 `SAI2CanvasRecorder.exe` 同目录，或将它的目录加入 `PATH`，再启动录制器。
-2. 打开 SAI2 和画布，回到录制器，必要时点「刷新」。选中 SAI2 进程后点「连接画布」，再选要录制的画布，确认预览完整。
-3. 选择采集来源、模式、输出参数和保存位置，点「开始录制」。弹出目录选择时，同一作品选择已有目录，不同作品选择「新建画布目录」。暂停和继续只影响当前这一次录制。
+1. 完整解压 Windows 包（保留 `_internal`），运行包内的 `SAI2CanvasRecorder.exe`，无需另装 Python。本地验收包已附带 FFmpeg。若使用名称带 `-external-ffmpeg.zip` 的 [GitHub 发行包](https://github.com/YUMI233666/sai2-canvas-recorder/releases)，请将带 `libx264` 的 [Windows 版 FFmpeg](https://ffmpeg.org/download.html#build-windows) 中的 `ffmpeg.exe` 放在录制器同目录，或将它的目录加入 `PATH`。
+2. 打开 SAI2 和画布，在录制器中选中 SAI2 进程，必要时点「刷新」。选择「整画布（固定构图）」时，需要点「连接画布」，选中目标并确认预览；选择「笔画过程（SAI2 窗口）」时，不用连接画布或识别版本。
+3. 设置模式、输出参数和保存位置，点「开始录制」。同一作品选择已有归档目录，不同作品选择「新建画布目录」；窗口模式新建时须输入作品名。暂停和继续只影响当前这一次录制。
 4. 点「停止并导出」，等待导出完成。点「打开输出」进入画布目录，查看这幅画的各次成片。
 
 窗口较矮时，可用鼠标滚轮或右侧滚动条访问底部按钮。参数在录制和导出时锁定，结束后可调整。`F8` 可以开始或停止录制，但只在录制器窗口有焦点时生效。
@@ -44,7 +46,7 @@
 | 整画布（固定构图） | 只录画布合成图，构图不随窗口缩放、平移或旋转变化，不含界面或鼠标。若 SAI2 在抬笔时才更新合成图，实时模式也只能录到整条线一次出现 |
 | 笔画过程（SAI2 窗口） | 采集所选 SAI2 进程的主窗口，录入窗口正在显示的画面，包括落笔中途已显示的部分、工具栏和画布视图变化。不是桌面录制 |
 
-要检查线条是否随笔尖逐步延伸，选 **「笔画过程（SAI2 窗口）」+「实时录制」**，先用 `30 FPS` 试录。开始前在 SAI2 中切到要录的画布，并保持它为活动文档：录制器选中的画布用于归档，窗口模式录到的是 SAI2 当前显示的内容。录制前设好窗口大小，录制中不要最小化或调整窗口大小；遇到这两种变化会停止采集并尝试导出已有画面。连接后的静态预览仍为整画布，开始录制后才显示窗口采集预览。
+要检查线条是否随笔尖逐步延伸，选 **「笔画过程（SAI2 窗口）」+「实时录制」**，先用 `30 FPS` 试录。窗口模式不绑定文档，会录下当前窗口显示的内容，包括切换到其他文档。录制前设好窗口大小，录制中不要最小化或调整窗口大小；遇到这两种变化会停止采集并尝试导出已有画面。开始录制后才显示窗口预览。
 
 ## 选实时还是延时
 
@@ -69,7 +71,7 @@
 
 ## 找成片、清理和恢复
 
-默认保存位置是当前用户的 `Videos\SAI2录制`。同一画布可以录多次，每次成片按时间命名，放在同一个画布目录，互不覆盖。关闭软件后，可以重新连接画布，在开始录制时选择原目录。名称和尺寸相同的目录会排在前面，但这不是同一作品的证明；遇到同名的不同作品，应选「新建画布目录」。重新连接前，录制器会记住这次连接中已经确认过的画布目录。
+默认保存位置是当前用户的 `Videos\SAI2录制`。同一作品可以录多次，每次成片单独命名，放在同一个画布目录，互不覆盖。窗口模式每次开始录制时手动选择已有目录或命名新建，不会根据当前文档猜测归属。整画布模式下，名称和尺寸匹配的目录优先显示，但同名不代表同一作品；录制器会记住当前连接中已经确认过的画布目录。
 
 ```text
 SAI2录制/
@@ -89,7 +91,7 @@ SAI2录制/
 | 文件 | 用途 |
 | --- | --- |
 | `日期-时间-编号.mp4` / `.mkv` | 单次录制的成片，导出成功后在画布目录生成 |
-| `canvas.json` | 画布目录的标记和原始名称、尺寸，用于后续选择目录 |
+| `canvas.json` | 画布目录的标记和作品名称。窗口模式新建时不读取画布尺寸，因此尺寸为空 |
 | `_sessions/<录制编号>/parts/` | 本次录制写入的 MKV 分段，默认按约 `60` 秒**视频时长**切分 |
 | `session.json` | 会话信息，恢复分段需要此文件 |
 | `segments.csv`、`concat.txt` | 分段清单与合并清单 |
@@ -102,7 +104,7 @@ SAI2录制/
 ## SAI2 兼容性与排查
 
 - 整画布模式支持读取已适配的 64 位 SAI2 画布，单次只录一个画布，上限 `6400` 万像素。切换活动文档不会换掉录制目标。目标画布关闭、像素尺寸改变或 SAI2 退出时，录制器会停止并尝试导出已有画面。
-- 笔画过程模式仍需连接画布来选择归档目录；采集本身通过 [Windows Graphics Capture](https://learn.microsoft.com/windows/win32/api/windows.graphics.capture.interop/nf-windows-graphics-capture-interop-igraphicscaptureiteminterop-createforwindow) 获取窗口。若启动提示采集失败，先还原并保持 SAI2 窗口可见；该模式不会自动改为桌面采集。
+- 笔画过程模式不依赖 SAI2 的版本指纹或画布读取，通过 [Windows Graphics Capture](https://learn.microsoft.com/windows/win32/api/windows.graphics.capture.interop/nf-windows-graphics-capture-interop-igraphicscaptureiteminterop-createforwindow) 获取窗口。若启动提示采集失败，先还原并保持 SAI2 窗口可见；该模式不会自动改为桌面采集。
 - 内置指定指纹的 SAI2 `2023.04.05` 专版（MD5：`9da34848ba9e6993a40262b462e0445d`）。打开画布后直接点「连接画布」。录制器不会修改 SAI2 安装文件。
 - 连接失败时，先确认画布已打开，且录制器和 SAI2 以相同权限运行。未适配的版本可尝试「识别此版本」，但识别成功不代表已通过录制兼容性验证；应先确认预览再试录。
 - 需要反馈时，点「保存诊断」，并附上失败步骤和画布尺寸。诊断包含程序路径、指纹、错误和统计，不包含画布图像或内存转储。打包版设置、识别缓存和应用日志位于 `%LOCALAPPDATA%\SAI2CanvasRecorder`，源码运行时位于项目根目录。
@@ -125,11 +127,20 @@ powershell -ExecutionPolicy Bypass -File .\build_pose_studio.ps1
 powershell -ExecutionPolicy Bypass -File .\build_recorder.ps1
 ```
 
-以上命令产出本机自用包。制作外置 FFmpeg 版时，加 `-ExternalFfmpeg`，产物位于 `dist/github/`。外置版也可通过环境变量 `SAI2_FFMPEG_EXE` 指定 `ffmpeg.exe` 的完整路径。
+以上命令产出本机自用包，程序位于 `dist/<版本>/SAI2CanvasRecorder/`。制作外置 FFmpeg 版时，加 `-ExternalFfmpeg`，产物位于 `dist/github/`。外置版也可通过环境变量 `SAI2_FFMPEG_EXE` 指定 `ffmpeg.exe` 的完整路径。
 
 首次构建会从固定的上游提交获取两个 VRM，并核对 SHA-256。也可把[声明](pose_studio/assets/Hinzka-NOTICE.md)中的原文件按发行文件名放入 `downloads/hinzka/`，避免构建时下载模型。
 
-如果本地 `.venv` 已装好依赖，且已构建 3D 组件，可以用 `.\.venv\Scripts\python.exe .\tools\build_recorder.py` 直接打包。整理本地目录时，可删除 `build/` 和 `.cache/`；继续使用现有开发环境时，保留 `.venv/` 与 `.runtime/`。只运行打包版时，保留当前版本的完整程序目录即可。
+如果本地 `.venv` 已装好依赖，且已构建 3D 组件，可以用 `.\.venv\Scripts\python.exe .\tools\build_recorder.py` 直接打包。项目根目录的 `launch_recorder.cmd` 优先启动已构建的本地测试版，没有测试版时再查找正式版或源码环境。
+
+`dist/` 里的发行包、`build/` 和 `.cache/` 里的构建文件都不提交到 Git。只运行打包版时，保留完整程序目录即可；继续开发则保留 `.venv/`、`.runtime/` 和 `downloads/hinzka/`，可避免重新安装或下载。录制输出不属于构建文件，整理时不要删除。
+
+运行免识别启动和作品归档的回归测试（不启动 SAI2）：
+
+```powershell
+$env:PYTHONPATH = (Resolve-Path src).Path
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
 
 ## 开源说明
 

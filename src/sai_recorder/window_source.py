@@ -16,9 +16,9 @@ class SaiWindowSource:
 
         try:
             if psutil.Process(pid).create_time() != process_created:
-                raise RuntimeError('SAI2 进程已变化，请重新连接画布。')
+                raise RuntimeError('SAI2 进程已变化，请刷新并重新选择进程。')
         except psutil.Error as exc:
-            raise RuntimeError('无法找到原 SAI2 进程，请重新连接画布。') from exc
+            raise RuntimeError('无法找到原 SAI2 进程，请刷新并重新选择进程。') from exc
 
         user32 = WinDLL('user32', use_last_error=True)
         self._is_minimized = user32.IsIconic
@@ -52,7 +52,7 @@ class SaiWindowSource:
 
             @self._capture.event
             def on_closed():
-                self._fail('SAI2 窗口采集已结束，请重新连接后再录制。')
+                self._fail('SAI2 窗口采集已结束，请重新打开或选择窗口后再录制。')
 
             self._control = self._capture.start_free_threaded()
         except Exception as exc:

@@ -1,10 +1,12 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-for %%D in (dist\github dist) do (
-    if exist "%%D\0.2.1\SAI2CanvasRecorder\SAI2CanvasRecorder.exe" (
-        start "" "%%D\0.2.1\SAI2CanvasRecorder\SAI2CanvasRecorder.exe"
-        exit /b 0
+for %%V in (0.2.2-alpha.1 0.2.1) do (
+    for %%D in (dist dist\github) do (
+        if exist "%%D\%%V\SAI2CanvasRecorder\SAI2CanvasRecorder.exe" (
+            start "" "%%D\%%V\SAI2CanvasRecorder\SAI2CanvasRecorder.exe"
+            exit /b 0
+        )
     )
 )
 if exist ".venv\Scripts\pythonw.exe" (
